@@ -128,4 +128,7 @@ if __name__ == "__main__":
 
     if write_success:
         print("\n✅ PRUEBA COMPLETA: Ambos tests fueron exitosos.")
-    elif read_value is not None and not write_
+    elif read_value is not None and not write_success:
+        print("\n⚠️ RESULTADO AMBIGUO: LECTURA OK, ESCRITURA FALLIDA.")
+    else:
+        print("\n❌ FALLO DE LECTURA Y ESCRITURA.")
