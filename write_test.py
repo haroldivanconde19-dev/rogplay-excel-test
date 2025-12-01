@@ -5,7 +5,7 @@ import time
 from dotenv import load_dotenv
 import msal
 
-# Configuración de Logging
+# Configuración de Logging para ver el output
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -13,17 +13,16 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # =====================================================
-# CONFIGURACIÓN DE MICROSOFT GRAPH
+# CONFIGURACIÓN DE MICROSOFT GRAPH (Se asume configurado)
 # =====================================================
 TENANT_ID = os.getenv("MS_TENANT_ID")
 CLIENT_ID = os.getenv("MS_CLIENT_ID")
 CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET")
 USER_ID = os.getenv("MS_USER_ID")
 FILE_ID = os.getenv("NETFLIX_FILE_ID")
-SHEET_NAME = "VENTAS" # Hoja de cálculo a usar
+SHEET_NAME = "VENTAS" # Hoja de cálculo a usar para la prueba
 
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
-# El scope es Files.ReadWrite.All, que está incluido en .default si fue concedido por el admin.
 SCOPE = ["https://graph.microsoft.com/.default"] 
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 
@@ -31,7 +30,7 @@ GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 _token_cache = {"access_token": None, "expires_at": 0}
 
 # =====================================================
-# FUNCIÓN 1: OBTENER TOKEN (Copia de tu get_token.py)
+# FUNCIÓN 1: OBTENER TOKEN (De tu código original)
 # =====================================================
 
 def get_token():
@@ -74,8 +73,7 @@ def get_token():
 
 def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: str):
     """
-    Intenta escribir una cadena en una celda específica usando PATCH.
-    Ej: range_address = 'A1:A1'
+    Intenta escribir una cadena en una celda específica (ej: B1:B1) usando PATCH.
     """
     token = get_token()
     if not token or not file_id:
@@ -87,8 +85,7 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
         "Content-Type": "application/json"
     }
 
-    # Construir la URL para el rango específico
-    # Usamos /range(address='...') para la escritura
+    # Sintaxis más segura para la URL
     url = (
         f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/items/{file_id}"
         f"/workbook/worksheets('{sheet_name}')/range(address='{range_address}')/values"
@@ -102,7 +99,7 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
     try:
         response = requests.patch(url, headers=headers, json=payload, timeout=10)
         
-        if response.status_code in (200, 204):
+        if response.status_code in (200, 202, 204):
             logger.info(f"🎉 ÉXITO: Celda {range_address} actualizada con '{value}'.")
             return True
         else:
@@ -122,8 +119,8 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
 
 if __name__ == "__main__":
     
-    # 1. Intentar escribir "PUNTO" en la celda A1 (Columna y Fila 1)
-    if write_single_cell(FILE_ID, SHEET_NAME, "A1:A1", "PUNTO"):
+    # ⚠️ CAMBIO CRÍTICO: Escribir en Z1 para no interferir con los encabezados
+    if write_single_cell(FILE_ID, SHEET_NAME, "Z1:Z1", "API_OK"):
         print("\n✅ PRUEBA DE ESCRITURA FINALIZADA CON ÉXITO.")
     else:
-        print("\n❌ PRUEBA DE ESCRITURA FALLIDA. Revisa los logs de ERROR arriba para el código 400.")
+        print("\n❌ PRUEBA DE ESCRITURA FALLIDA. Revisa los logs de ERROR para el código 400.")
