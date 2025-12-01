@@ -76,7 +76,7 @@ def read_single_cell(file_id: str, sheet_name: str, range_address: str):
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
     url = (
-        f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/items/{file_id}"
+        f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/root:/test_api_excel.xlsx:"
         f"/workbook/worksheets('{sheet_name}')/range(address='{range_address}')/values"
     )
 
@@ -114,7 +114,7 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
     }
 
     url = (
-        f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/items/{file_id}"
+        f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/root:/test_api_excel.xlsx:"
         f"/workbook/worksheets('{sheet_name}')/range(address='{range_address}')/values"
     )
 
