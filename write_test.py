@@ -5,27 +5,28 @@ import time
 from dotenv import load_dotenv
 import msal
 
-# ⚙️ Configurar logging para depuración
+# ⚙️ Configuración de logs
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# 🔄 Cargar variables del entorno
+# 🔄 Cargar variables de entorno
 load_dotenv()
 
 # =====================================================
-# 🔐 CONFIG MICROSOFT GRAPH
+# 🔐 CONFIGURACIÓN
 # =====================================================
 TENANT_ID = os.getenv("MS_TENANT_ID")
 CLIENT_ID = os.getenv("MS_CLIENT_ID")
 CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET")
-FILE_ID = os.getenv("NETFLIX_FILE_ID")  # ID del archivo de prueba
-SHEET_NAME = "VENTAS"  # nombre exacto de la hoja
+USER_ID = os.getenv("MS_USER_ID")  # Debe ser el correo (UPN), no el GUID
+FILE_ID = os.getenv("NETFLIX_FILE_ID")
+SHEET_NAME = "VENTAS"
 
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"]
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 
-# Cache de token básico
+# Cache de token
 _token_cache = {"access_token": None, "expires_at": 0}
 
 # =====================================================
@@ -36,7 +37,7 @@ def get_token():
     global _token_cache
 
     if not CLIENT_ID or not CLIENT_SECRET or not TENANT_ID:
-        logger.error("❌ ERROR: Faltan credenciales en el .env")
+        logger.error("❌ Faltan credenciales de MS Graph.")
         return None
 
     if _token_cache["access_token"] and time.time() < _token_cache["expires_at"] - 60:
@@ -48,7 +49,6 @@ def get_token():
             authority=AUTHORITY,
             client_credential=CLIENT_SECRET
         )
-
         logger.info("🔄 Solicitando nuevo token a Microsoft...")
         result = app.acquire_token_for_client(scopes=SCOPE)
 
@@ -76,7 +76,7 @@ def read_single_cell(file_id: str, sheet_name: str, range_address: str):
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
     url = (
-        f"{GRAPH_BASE_URL}/me/drive/items/{file_id}"
+        f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/items/{file_id}"
         f"/workbook/worksheets('{sheet_name}')/range(address='{range_address}')/values"
     )
 
@@ -88,15 +88,14 @@ def read_single_cell(file_id: str, sheet_name: str, range_address: str):
         if response.status_code == 200:
             data = response.json().get("values", [[None]])
             value = data[0][0]
-            logger.info(f"🎉 ÉXITO de LECTURA: Celda {range_address} contiene el valor: '{value}'")
+            logger.info(f"🎉 ÉXITO de LECTURA: Celda {range_address} contiene: '{value}'")
             return value
         else:
             logger.error(f"❌ FALLO DE LECTURA ({response.status_code}).")
-            logger.error(f"   Response de MS Graph: {response.text}")
+            logger.error(f"   MS Graph dice: {response.text}")
             return None
-
     except Exception as e:
-        logger.error(f"❌ Excepción al hacer GET: {e}")
+        logger.error(f"❌ Excepción al leer: {e}")
         return None
 
 # =====================================================
@@ -115,35 +114,33 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
     }
 
     url = (
-        f"{GRAPH_BASE_URL}/me/drive/items/{file_id}"
+        f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/items/{file_id}"
         f"/workbook/worksheets('{sheet_name}')/range(address='{range_address}')/values"
     )
 
     payload = {"values": [[value]]}
 
-    logger.info(f"📝 Intentando escribir '{value}' en rango: {range_address}")
+    logger.info(f"📝 Intentando escribir '{value}' en: {range_address}")
 
     try:
         response = requests.patch(url, headers=headers, json=payload, timeout=10)
 
         if response.status_code in (200, 202, 204):
-            logger.info(f"✅ ÉXITO de ESCRITURA: Celda {range_address} actualizada.")
+            logger.info(f"✅ ESCRITURA OK en {range_address}")
             return True
         else:
-            logger.error(f"❌ FALLO DE ESCRITURA ({response.status_code}).")
-            logger.error(f"   Response de MS Graph: {response.text}")
+            logger.error(f"❌ ERROR DE ESCRITURA ({response.status_code})")
+            logger.error(f"   MS Graph dice: {response.text}")
             return False
-
     except Exception as e:
-        logger.error(f"❌ Excepción al hacer PATCH: {e}")
+        logger.error(f"❌ Excepción escribiendo: {e}")
         return False
 
 # =====================================================
-# 🚀 EJECUCIÓN PRINCIPAL
+# 🚀 PRUEBA
 # =====================================================
 
 if __name__ == "__main__":
-
     print("\n==================================================")
     print("  INICIANDO PRUEBA DOBLE (LECTURA Y ESCRITURA)")
     print("==================================================")
