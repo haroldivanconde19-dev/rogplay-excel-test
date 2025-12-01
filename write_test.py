@@ -1,134 +1,97 @@
-import os
-import logging
 import requests
-import time
-from dotenv import load_dotenv
-import msal
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-load_dotenv()
+# ============
+# 🔐 CREDENCIALES DE TU APP EN AZURE
+# ============
+TENANT_ID = "TU_TENANT_ID"
+CLIENT_ID = "TU_CLIENT_ID"
+CLIENT_SECRET = "TU_CLIENT_SECRET"
 
-TENANT_ID = os.getenv("MS_TENANT_ID")
-CLIENT_ID = os.getenv("MS_CLIENT_ID")
-CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET")
-USER_ID = os.getenv("MS_USER_ID")
+# ============
+# 📄 DATOS DEL EXCEL EN SHAREPOINT
+# ============
+SHAREPOINT_SITE = "haroldconde.sharepoint.com"
+SITE_NAME = "ROGPLAY"
+EXCEL_FILENAME = "test_api_excel.xlsx"
 SHEET_NAME = "VENTAS"
-EXCEL_FILE_NAME = "test_api_excel.xlsx"  # Nombre exacto del archivo
+READ_RANGE = "A1:A1"
+WRITE_RANGE = "B1:B1"
+WRITE_VALUE = [["Hola desde Python!"]]
 
-AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
-SCOPE = ["https://graph.microsoft.com/.default"]
-GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
-_token_cache = {"access_token": None, "expires_at": 0}
+# ============
+# 🔐 Obtener access_token
+# ============
+token_url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
 
-def get_token():
-    global _token_cache
+token_data = {
+    "grant_type": "client_credentials",
+    "client_id": CLIENT_ID,
+    "client_secret": CLIENT_SECRET,
+    "scope": "https://graph.microsoft.com/.default"
+}
 
-    if not CLIENT_ID or not CLIENT_SECRET or not TENANT_ID:
-        logger.error("❌ ERROR: Faltan credenciales MS en .env")
-        return None
+token_resp = requests.post(token_url, data=token_data)
+access_token = token_resp.json().get("access_token")
 
-    if _token_cache["access_token"] and time.time() < _token_cache["expires_at"] - 60:
-        return _token_cache["access_token"]
+if not access_token:
+    print("❌ ERROR: No se pudo obtener el token.")
+    exit()
 
-    try:
-        app = msal.ConfidentialClientApplication(
-            CLIENT_ID,
-            authority=AUTHORITY,
-            client_credential=CLIENT_SECRET
-        )
-        logger.info("🔄 Solicitando nuevo token a Microsoft...")
-        result = app.acquire_token_for_client(scopes=SCOPE)
+headers = {"Authorization": f"Bearer {access_token}"}
 
-        if "access_token" in result:
-            logger.info("✅ Token obtenido y guardado en caché.")
-            _token_cache["access_token"] = result["access_token"]
-            _token_cache["expires_at"] = time.time() + result.get("expires_in", 3599)
-            return result["access_token"]
-        else:
-            logger.error(f"❌ Error al obtener token: {result.get('error_description')}")
-            return None
-    except Exception as e:
-        logger.error(f"❌ Excepción obteniendo token: {e}")
-        return None
+# ============
+# 🔎 Obtener SITE-ID de SharePoint
+# ============
+site_url = f"https://graph.microsoft.com/v1.0/sites/{SHAREPOINT_SITE}:/sites/{SITE_NAME}"
+site_resp = requests.get(site_url, headers=headers)
+site_data = site_resp.json()
+site_id = site_data.get("id")
 
-def read_single_cell(sheet_name: str, range_address: str):
-    token = get_token()
-    if not token:
-        return None
+if not site_id:
+    print("❌ ERROR: No se encontró el site. Revisa el nombre.")
+    print(site_data)
+    exit()
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json"
-    }
+print(f"✅ Site ID obtenido: {site_id}")
 
-    url = (
-        f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/root:/{EXCEL_FILE_NAME}:/workbook"
-        f"/worksheets('{sheet_name}')/range(address='{range_address}')/values"
-    )
+# ============
+# 📄 Obtener ID del archivo Excel
+# ============
+file_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/root:/{EXCEL_FILENAME}"
+file_resp = requests.get(file_url, headers=headers)
+file_data = file_resp.json()
+file_id = file_data.get("id")
 
-    logger.info(f"💾 Intentando leer rango: {range_address}")
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json().get("values", [[None]])
-            value = data[0][0]
-            logger.info(f"🎉 ÉXITO de LECTURA: Celda {range_address} contiene el valor: '{value}'")
-            return value
-        else:
-            logger.error(f"❌ FALLO DE LECTURA ({response.status_code}).")
-            logger.error(f"   MS Graph dice: {response.text}")
-            return None
-    except Exception as e:
-        logger.error(f"❌ Excepción fatal al hacer GET: {e}")
-        return None
+if not file_id:
+    print("❌ ERROR: No se encontró el archivo Excel.")
+    print(file_data)
+    exit()
 
-def write_single_cell(sheet_name: str, range_address: str, value: str):
-    token = get_token()
-    if not token:
-        return False
+print(f"✅ Archivo Excel encontrado. ID: {file_id}")
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-    }
+# ============
+# 🔍 Leer celda (READ_RANGE)
+# ============
+read_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/items/{file_id}/workbook/worksheets('{SHEET_NAME}')/range(address='{READ_RANGE}')/values"
+read_resp = requests.get(read_url, headers=headers)
 
-    url = (
-        f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/root:/{EXCEL_FILE_NAME}:/workbook"
-        f"/worksheets('{sheet_name}')/range(address='{range_address}')/values"
-    )
+if read_resp.status_code == 200:
+    read_value = read_resp.json().get("value")
+    print(f"📖 Valor en {READ_RANGE}: {read_value}")
+else:
+    print(f"❌ ERROR al leer {READ_RANGE}")
+    print(read_resp.status_code, read_resp.text)
 
-    payload = {"values": [[value]]}
-    logger.info(f"💾 Intentando escribir '{value}' en rango: {range_address}")
+# ============
+# ✍️ Escribir valor en celda (WRITE_RANGE)
+# ============
+write_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/items/{file_id}/workbook/worksheets('{SHEET_NAME}')/range(address='{WRITE_RANGE}')"
+write_headers = {**headers, "Content-Type": "application/json"}
 
-    try:
-        response = requests.patch(url, headers=headers, json=payload, timeout=10)
-        if response.status_code in (200, 202, 204):
-            logger.info(f"🎉 ÉXITO de ESCRITURA: Celda {range_address} actualizada.")
-            return True
-        else:
-            logger.error(f"❌ FALLO DE ESCRITURA ({response.status_code}).")
-            logger.error(f"   MS Graph dice: {response.text}")
-            return False
-    except Exception as e:
-        logger.error(f"❌ Excepción fatal al hacer PATCH: {e}")
-        return False
+write_resp = requests.patch(write_url, headers=write_headers, json={"values": WRITE_VALUE})
 
-if __name__ == "__main__":
-    print("\n==================================================")
-    print("  INICIANDO PRUEBA DOBLE (LECTURA Y ESCRITURA)")
-    print("==================================================")
-
-    read_value = read_single_cell(SHEET_NAME, "A1:A1")
-    if read_value is not None:
-        write_success = write_single_cell(SHEET_NAME, "Z1:Z1", "API_OK_FINAL")
-    else:
-        write_success = False
-
-    if write_success:
-        print("\n✅ PRUEBA COMPLETA: Ambos tests fueron exitosos.")
-    elif read_value is not None and not write_success:
-        print("\n⚠️ RESULTADO AMBIGUO: LECTURA OK, ESCRITURA FALLIDA.")
-    else:
-        print("\n❌ FALLO DE LECTURA Y ESCRITURA.")
+if write_resp.status_code in [200, 201]:
+    print(f"✅ Escrito exitosamente en {WRITE_RANGE}: {WRITE_VALUE}")
+else:
+    print(f"❌ ERROR al escribir en {WRITE_RANGE}")
+    print(write_resp.status_code, write_resp.text)
