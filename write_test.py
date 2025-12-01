@@ -154,25 +154,28 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
 # =====================================================
 
 if __name__ == "__main__":
-    
     print("\n==================================================")
-    print("      INICIANDO PRUEBA DOBLE (LECTURA Y ESCRITURA)")
-    print("==================================================")
-    
-    # 1. Prueba de LECTURA (GET a A6)
+    print("  INICIANDO PRUEBA DOBLE (LECTURA Y ESCRITURA)")
+    print("==================================================\n")
+
+    # ✅ 1. Prueba de lectura
     read_value = read_single_cell(FILE_ID, SHEET_NAME, "A6:A6")
 
-    # 2. Prueba de ESCRITURA (PATCH a Z1)
-    if read_value is not None:
-        write_success = write_single_cell(FILE_ID, SHEET_NAME, "Z1:Z1", "API_OK_FINAL")
+    # ✅ 2. Prueba de escritura segura
+    if read_value is not None or read_value == "":
+        # Escribir en una celda alejada (Z20) que no esté protegida
+        write_success = write_single_cell(FILE_ID, SHEET_NAME, "Z20:Z20", "API_OK_FINAL")
     else:
         write_success = False
 
-    if write_success:
-        print("\n✅ PRUEBA COMPLETA: Ambos tests fueron exitosos.")
-    elif read_value is not None and not write_success:
-        print("\n⚠️ RESULTADO AMBIGUO: LECTURA OK, ESCRITURA FALLIDA.")
-        print("   CAUSA PROBABLE: Error de sintaxis o tipo de dato, o permiso de escritura restringido.")
+    # ✅ Resultado final
+    if read_value is not None or read_value == "":
+        print(f"\n🔎 LECTURA OK: Valor leído en A6 → {read_value!r}")
     else:
-        print("\n❌ PRUEBA FALLIDA: FALLO DE LECTURA Y ESCRITURA.")
-        print("   CAUSA PROBABLE: MS_USER_ID, NETFLIX_FILE_ID o SHEET_NAME es incorrecto.")
+        print("\n❌ ERROR de lectura: Verifica el SHEET_NAME, FILE_ID o permisos.")
+
+    if write_success:
+        print("✅ ESCRITURA OK: Valor 'API_OK_FINAL' escrito en Z20.\n")
+    else:
+        print("❌ ERROR de escritura: Verifica que Z20 esté libre y sin protección.\n")
+
