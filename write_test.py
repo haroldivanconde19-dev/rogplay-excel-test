@@ -158,24 +158,22 @@ if __name__ == "__main__":
     print("  INICIANDO PRUEBA DOBLE (LECTURA Y ESCRITURA)")
     print("==================================================\n")
 
-    # ✅ 1. Prueba de lectura
-    read_value = read_single_cell(FILE_ID, SHEET_NAME, "A6:A6")
+    # ✅ 1. Prueba de lectura en M30
+    read_value = read_single_cell(FILE_ID, SHEET_NAME, "M30:M30")
 
-    # ✅ 2. Prueba de escritura segura
+    # ✅ 2. Prueba de escritura en M30
     if read_value is not None or read_value == "":
-        # Escribir en una celda alejada (Z20) que no esté protegida
-        write_success = write_single_cell(FILE_ID, SHEET_NAME, "Z20:Z20", "API_OK_FINAL")
+        write_success = write_single_cell(FILE_ID, SHEET_NAME, "M30:M30", "API_OK_FINAL")
     else:
         write_success = False
 
-    # ✅ Resultado final
     if read_value is not None or read_value == "":
-        print(f"\n🔎 LECTURA OK: Valor leído en A6 → {read_value!r}")
+        print(f"\n🔎 LECTURA OK: Valor leído en M30 → {read_value!r}")
     else:
         print("\n❌ ERROR de lectura: Verifica el SHEET_NAME, FILE_ID o permisos.")
 
     if write_success:
-        print("✅ ESCRITURA OK: Valor 'API_OK_FINAL' escrito en Z20.\n")
+        print("✅ ESCRITURA OK: Valor 'API_OK_FINAL' escrito en M30.\n")
     else:
-        print("❌ ERROR de escritura: Verifica que Z20 esté libre y sin protección.\n")
+        print("❌ ERROR de escritura: Verifica que M30 esté libre y sin protección.\n")
 
