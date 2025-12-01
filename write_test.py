@@ -5,8 +5,8 @@ import time
 from dotenv import load_dotenv
 import msal
 
-# Configuración de Logging para ver el output
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# ⚠️ Nivel DEBUG para ver la URL completa antes de la llamada.
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Cargar variables
@@ -20,7 +20,7 @@ CLIENT_ID = os.getenv("MS_CLIENT_ID")
 CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET")
 USER_ID = os.getenv("MS_USER_ID")
 FILE_ID = os.getenv("NETFLIX_FILE_ID")
-SHEET_NAME = "VENTAS" # Hoja de cálculo a usar para la prueba
+SHEET_NAME = "VENTAS" # Hoja de cálculo a usar para la prueba (Ajusta aquí si el nombre es diferente)
 
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"] 
@@ -73,7 +73,7 @@ def get_token():
 
 def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: str):
     """
-    Intenta escribir una cadena en una celda específica (ej: B1:B1) usando PATCH.
+    Intenta escribir una cadena en una celda específica (ej: Z1:Z1) usando PATCH.
     """
     token = get_token()
     if not token or not file_id:
@@ -85,7 +85,7 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
         "Content-Type": "application/json"
     }
 
-    # Sintaxis más segura para la URL
+    # URL CRÍTICA: La sintaxis que debe coincidir con los IDs
     url = (
         f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/items/{file_id}"
         f"/workbook/worksheets('{sheet_name}')/range(address='{range_address}')/values"
@@ -94,6 +94,7 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
     # El payload es una lista de listas: [[valor]]
     payload = {"values": [[value]]} 
     
+    logger.debug(f"DEBUG URL: {url}")
     logger.info(f"💾 Intentando escribir '{value}' en rango: {range_address}")
     
     try:
@@ -119,7 +120,7 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
 
 if __name__ == "__main__":
     
-    # ⚠️ CAMBIO CRÍTICO: Escribir en Z1 para no interferir con los encabezados
+    # Escribir en Z1 para no interferir con los encabezados
     if write_single_cell(FILE_ID, SHEET_NAME, "Z1:Z1", "API_OK"):
         print("\n✅ PRUEBA DE ESCRITURA FINALIZADA CON ÉXITO.")
     else:
