@@ -13,14 +13,15 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # =====================================================
-# CONFIGURACIÓN DE MICROSOFT GRAPH (Se asume configurado)
+# CONFIGURACIÓN DE MICROSOFT GRAPH
 # =====================================================
 TENANT_ID = os.getenv("MS_TENANT_ID")
 CLIENT_ID = os.getenv("MS_CLIENT_ID")
 CLIENT_SECRET = os.getenv("MS_CLIENT_SECRET")
+# MS_USER_ID debe ser el ID de Objeto (GUID) del usuario
 USER_ID = os.getenv("MS_USER_ID")
 FILE_ID = os.getenv("NETFLIX_FILE_ID")
-SHEET_NAME = "VENTAS" # Hoja de cálculo a usar para la prueba (Ajusta aquí si el nombre es diferente)
+SHEET_NAME = "VENTAS" # Hoja de cálculo confirmada
 
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"] 
@@ -30,17 +31,17 @@ GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 _token_cache = {"access_token": None, "expires_at": 0}
 
 # =====================================================
-# FUNCIÓN 1: OBTENER TOKEN (De tu código original)
+# FUNCIÓN 1: OBTENER TOKEN
 # =====================================================
 
 def get_token():
     global _token_cache
     
     if not CLIENT_ID or not CLIENT_SECRET or not TENANT_ID:
-        logger.error("❌ ERROR: Faltan credenciales MS en .env")
+        logger.error("❌ ERROR: Faltan credenciales MS en .env/Railway")
         return None
 
-    # 1. Verificar si ya tenemos un token válido (con 60 seg de margen)
+    # 1. Verificar si ya tenemos un token válido
     if _token_cache["access_token"] and time.time() < _token_cache["expires_at"] - 60:
         return _token_cache["access_token"]
 
@@ -68,7 +69,45 @@ def get_token():
         return None
 
 # =====================================================
-# FUNCIÓN 2: ESCRITURA MÍNIMA (PATCH)
+# FUNCIÓN 2: LECTURA (GET)
+# =====================================================
+
+def read_single_cell(file_id: str, sheet_name: str, range_address: str):
+    """
+    Intenta leer el valor de una celda específica usando GET.
+    """
+    token = get_token()
+    if not token or not file_id:
+        return None
+
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+    url = (
+        f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/items/{file_id}"
+        f"/workbook/worksheets('{sheet_name}')/range(address='{range_address}')/values"
+    )
+    
+    logger.info(f"💾 Intentando leer rango: {range_address}")
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json().get("values", [[None]])
+            value = data[0][0]
+            logger.info(f"🎉 ÉXITO de LECTURA: Celda {range_address} contiene el valor: '{value}'")
+            return value
+        else:
+            logger.error(f"❌ FALLO DE LECTURA ({response.status_code}).")
+            logger.error(f"   Response de MS Graph: {response.text}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Excepción fatal al hacer GET: {e}")
+        return None
+
+# =====================================================
+# FUNCIÓN 3: ESCRITURA (PATCH)
 # =====================================================
 
 def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: str):
@@ -85,27 +124,23 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
         "Content-Type": "application/json"
     }
 
-    # URL CRÍTICA: La sintaxis que debe coincidir con los IDs
     url = (
         f"{GRAPH_BASE_URL}/users/{USER_ID}/drive/items/{file_id}"
         f"/workbook/worksheets('{sheet_name}')/range(address='{range_address}')/values"
     )
     
-    # El payload es una lista de listas: [[valor]]
     payload = {"values": [[value]]} 
     
-    logger.debug(f"DEBUG URL: {url}")
     logger.info(f"💾 Intentando escribir '{value}' en rango: {range_address}")
     
     try:
         response = requests.patch(url, headers=headers, json=payload, timeout=10)
         
         if response.status_code in (200, 202, 204):
-            logger.info(f"🎉 ÉXITO: Celda {range_address} actualizada con '{value}'.")
+            logger.info(f"🎉 ÉXITO de ESCRITURA: Celda {range_address} actualizada.")
             return True
         else:
-            # Imprimimos la respuesta completa del error (esto es crucial)
-            logger.error(f"❌ ERROR CRÍTICO ({response.status_code}) al actualizar la celda.")
+            logger.error(f"❌ FALLO DE ESCRITURA ({response.status_code}).")
             logger.error(f"   Response de MS Graph: {response.text}")
             return False
             
@@ -120,8 +155,24 @@ def write_single_cell(file_id: str, sheet_name: str, range_address: str, value: 
 
 if __name__ == "__main__":
     
-    # Escribir en Z1 para no interferir con los encabezados
-    if write_single_cell(FILE_ID, SHEET_NAME, "Z1:Z1", "API_OK"):
-        print("\n✅ PRUEBA DE ESCRITURA FINALIZADA CON ÉXITO.")
+    print("\n==================================================")
+    print("      INICIANDO PRUEBA DOBLE (LECTURA Y ESCRITURA)")
+    print("==================================================")
+    
+    # 1. Prueba de LECTURA (GET a A6)
+    read_value = read_single_cell(FILE_ID, SHEET_NAME, "A6:A6")
+
+    # 2. Prueba de ESCRITURA (PATCH a Z1)
+    if read_value is not None:
+        write_success = write_single_cell(FILE_ID, SHEET_NAME, "Z1:Z1", "API_OK_FINAL")
     else:
-        print("\n❌ PRUEBA DE ESCRITURA FALLIDA. Revisa los logs de ERROR para el código 400.")
+        write_success = False
+
+    if write_success:
+        print("\n✅ PRUEBA COMPLETA: Ambos tests fueron exitosos.")
+    elif read_value is not None and not write_success:
+        print("\n⚠️ RESULTADO AMBIGUO: LECTURA OK, ESCRITURA FALLIDA.")
+        print("   CAUSA PROBABLE: Error de sintaxis o tipo de dato, o permiso de escritura restringido.")
+    else:
+        print("\n❌ PRUEBA FALLIDA: FALLO DE LECTURA Y ESCRITURA.")
+        print("   CAUSA PROBABLE: MS_USER_ID, NETFLIX_FILE_ID o SHEET_NAME es incorrecto.")
